@@ -51,26 +51,6 @@ public:
         return std::make_unique<DerivedSpecialized>(*static_cast<const DerivedSpecialized*>(this));
     }
 
-    auto Copy(tf::Subflow& subflow) const -> std::unique_ptr<Expression> final
-    {
-        DerivedSpecialized copy;
-
-        if (this->mostSigOp) {
-            subflow.emplace([this, &copy](tf::Subflow& sbf) {
-                copy.SetMostSigOp(mostSigOp->Copy(sbf), sbf);
-            });
-        }
-
-        if (this->leastSigOp) {
-            subflow.emplace([this, &copy](tf::Subflow& sbf) {
-                copy.SetLeastSigOp(leastSigOp->Copy(sbf), sbf);
-            });
-        }
-
-        subflow.join();
-
-        return std::make_unique<DerivedSpecialized>(copy);
-    }
     [[nodiscard]] auto Differentiate(const Expression& differentiationVariable) const -> std::unique_ptr<Expression> override
     {
         return Generalize()->Differentiate(differentiationVariable);
@@ -143,45 +123,6 @@ public:
         return std::make_unique<DerivedGeneralized>(generalized);
     }
 
-    auto Generalize(tf::Subflow& subflow) const -> std::unique_ptr<Expression> final
-    {
-        DerivedGeneralized generalized;
-
-        if (this->mostSigOp) {
-            subflow.emplace([this, &generalized](tf::Subflow& sbf) {
-                generalized.SetMostSigOp(*this->mostSigOp->Copy(sbf));
-            });
-        }
-
-        if (this->leastSigOp) {
-            subflow.emplace([this, &generalized](tf::Subflow& sbf) {
-                generalized.SetLeastSigOp(*this->leastSigOp->Copy(sbf));
-            });
-        }
-
-        subflow.join();
-
-        return std::make_unique<DerivedGeneralized>(generalized);
-    }
-
-    auto Simplify(tf::Subflow& subflow) const -> std::unique_ptr<Expression> override
-    {
-        std::unique_ptr<Expression> generalized, simplified;
-
-        tf::Task generalizeTask = subflow.emplace([this, &generalized](tf::Subflow& sbf) {
-            generalized = Generalize(sbf);
-        });
-
-        tf::Task simplifyTask = subflow.emplace([&generalized, &simplified](tf::Subflow& sbf) {
-            simplified = generalized->Simplify(sbf);
-        });
-
-        simplifyTask.succeed(generalizeTask);
-        subflow.join();
-
-        return simplified;
-    }
-
     [[nodiscard]] auto StructurallyEquivalent(const Expression& other) const -> bool final
     {
         if (this->GetType() != other.GetType()) {
@@ -208,45 +149,6 @@ public:
         }
 
         return true;
-    }
-
-    auto StructurallyEquivalent(const Expression& other, tf::Subflow& subflow) const -> bool final
-    {
-        if (this->GetType() != other.GetType()) {
-            return false;
-        }
-
-        std::unique_ptr<Expression> otherGeneralized;
-
-        tf::Task generalizeTask = subflow.emplace([&](tf::Subflow& sbf) {
-            otherGeneralized = other.Generalize(sbf);
-        });
-
-        bool mostSigOpEquivalent = false, leastSigOpEquivalent = false;
-
-        if (this->mostSigOp) {
-            tf::Task compMostSigOp = subflow.emplace([this, &otherGeneralized, &mostSigOpEquivalent](tf::Subflow& sbf) {
-                if (const auto& otherBinary = static_cast<const DerivedGeneralized&>(*otherGeneralized); otherBinary.HasMostSigOp()) {
-                    mostSigOpEquivalent = mostSigOp->StructurallyEquivalent(otherBinary.GetMostSigOp(), sbf);
-                }
-            });
-
-            compMostSigOp.succeed(generalizeTask);
-        }
-
-        if (this->leastSigOp) {
-            tf::Task compLeastSigOp = subflow.emplace([this, &otherGeneralized, &leastSigOpEquivalent](tf::Subflow& sbf) {
-                if (const auto& otherBinary = static_cast<const DerivedGeneralized&>(*otherGeneralized); otherBinary.HasLeastSigOp()) {
-                    leastSigOpEquivalent = leastSigOp->StructurallyEquivalent(otherBinary.GetLeastSigOp(), sbf);
-                }
-            });
-
-            compLeastSigOp.succeed(generalizeTask);
-        }
-
-        subflow.join();
-
-        return mostSigOpEquivalent && leastSigOpEquivalent;
     }
 
     /**
@@ -388,13 +290,6 @@ public:
     }
 
     auto operator=(const BoundedBinaryExpression& other) -> BoundedBinaryExpression& = default;
-
-    void Serialize(SerializationVisitor& visitor) const override
-    {
-        const auto generalized = Generalize();
-        const auto& derivedGeneralized = dynamic_cast<const DerivedGeneralized&>(*generalized);
-        visitor.Serialize(derivedGeneralized);
-    }
 
 private:
     std::unique_ptr<MostSigOpT> mostSigOp;
