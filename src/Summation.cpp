@@ -3,6 +3,8 @@
 //
 
 #include "Oasis/Summation.hpp"
+#include "Oasis/Variable.hpp"
+#include "Oasis/Add.hpp"
 
 namespace Oasis {
 } // Oasis

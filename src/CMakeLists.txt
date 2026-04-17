@@ -27,7 +27,7 @@ set(Oasis_SOURCES
     SimplifyVisitor.cpp
     Sine.cpp
     Subtract.cpp
-    # Summation.cpp
+    Summation.cpp
     Undefined.cpp
     Variable.cpp)
 

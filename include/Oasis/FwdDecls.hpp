@@ -48,6 +48,9 @@ class Derivative;
 
 template <typename, typename>
 class Integral;
+
+template <typename, typename>
+class Summation;
 }
 
 #endif // OASIS_FWDDECLS_HPP
